@@ -1,38 +1,56 @@
 import streamlit as st
-from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource
-import numpy as np
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
-st.title("Streamlit + Bokeh Ejemplo Compatible")
+# Configuración de la página
+st.set_page_config(page_title="Segmentación de Clientes", layout="wide")
 
-# Datos de ejemplo
-np.random.seed(42)
-df = pd.DataFrame({
-    "x": np.arange(1, 21),
-    "y1": np.random.randint(10, 100, 20),
-    "y2": np.random.randint(20, 120, 20)
-})
+st.title("📊 Segmentación de Clientes")
+st.write("Ejemplo de clustering K-Means para segmentar clientes según frecuencia de compra, tipo de juego y ubicación.")
 
-source = ColumnDataSource(df)
+# Subida de archivo
+uploaded_file = st.file_uploader("Sube tu archivo CSV", type=["csv"])
 
-# Gráfico 1
-p1 = figure(
-    title="Línea y puntos",
-    x_axis_label="X", y_axis_label="Y1",
-    plot_height=350, plot_width=500
-)
-p1.line('x', 'y1', source=source, line_width=2, color="blue")
-p1.circle('x', 'y1', source=source, size=8, color="red")
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
 
-# Gráfico 2
-p2 = figure(
-    title="Barras",
-    x_axis_label="X", y_axis_label="Y2",
-    plot_height=350, plot_width=500
-)
-p2.vbar(x='x', top='y2', source=source, width=0.5, color="green")
+    st.subheader("Vista previa de datos")
+    st.dataframe(df.head())
 
-# Mostrar
-st.bokeh_chart(p1, use_container_width=True)
-st.bokeh_chart(p2, use_container_width=True)
+    # Procesamiento de datos
+    df['FrecuenciaCompra'] = df.groupby('Cliente')['Orden'].transform('count')
+
+    # Codificación simple de variables categóricas
+    df_encoded = df.copy()
+    df_encoded['TipoInflable'] = df_encoded['TipoInflable'].astype('category').cat.codes
+    df_encoded['DireccionMapa'] = df_encoded['DireccionMapa'].astype('category').cat.codes
+
+    # Selección de características
+    features = ['FrecuenciaCompra', 'TipoInflable', 'DireccionMapa']
+    X = df_encoded[features]
+
+    # Escalado
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Clustering
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    df['Cluster'] = kmeans.fit_predict(X_scaled)
+
+    st.subheader("Clientes Segmentados")
+    st.dataframe(df[['Cliente', 'FrecuenciaCompra', 'TipoInflable', 'DireccionMapa', 'Cluster']])
+
+    # Visualización
+    fig, ax = plt.subplots()
+    scatter = ax.scatter(X_scaled[:, 0], X_scaled[:, 1], c=df['Cluster'], cmap='viridis')
+    ax.set_xlabel('Frecuencia de Compra (Escalada)')
+    ax.set_ylabel('Tipo de Inflable (Escalado)')
+    ax.set_title('Segmentación de Clientes')
+    plt.colorbar(scatter, ax=ax)
+    st.pyplot(fig)
+
+else:
+    st.info("Por favor sube un archivo CSV para comenzar.")
